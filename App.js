@@ -117,4 +117,10 @@ const styles = StyleSheet.create({
     padding: 20,
     textAlign: 'center'
   },
+  button:{
+    backgroundColor:'green',
+    fontSize: 18,
+    fontWeight: 'bold',
+    padding: 20,
+  }
 });
