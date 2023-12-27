@@ -44,7 +44,7 @@ export default function App() {
 
     // Llamada a la API de VirusTotal
     try {
-        const virusTotalApiKey = ''; // Reemplaza con tu clave API de VirusTotal
+        const virusTotalApiKey = '1bd323102055ecdad5d10b802f0a1ec5ecbecbbee39bc2864bb334e36387ea0d'; // Reemplaza con tu clave API de VirusTotal
         const apiUrl = 'https://www.virustotal.com/vtapi/v2/url/report';
         const response = await axios.post(apiUrl, {
             apikey: virusTotalApiKey,
