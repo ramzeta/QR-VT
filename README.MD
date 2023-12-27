@@ -53,3 +53,5 @@ Las contribuciones son bienvenidas. Por favor, lee el archivo `CONTRIBUTING.md` 
 ## Licencia
 
 Este proyecto está licenciado bajo [LICENCIA] - ver el archivo `LICENSE.md` para más detalles.
+
+Descargar: https://expo.dev/artifacts/eas/6znqB3imG2JLZx614njGMA.aab
