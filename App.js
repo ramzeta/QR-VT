@@ -1,143 +1,120 @@
-import axios from "axios";
-import { BarCodeScanner, PermissionStatus } from "expo-barcode-scanner";
-import React, { useEffect, useRef, useState } from "react";
-import {
-  AppState,
-  Pressable,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { BarCodeScanner } from 'expo-barcode-scanner';
+import React, { useEffect, useState } from 'react';
+import { Button, StyleSheet, Text, View } from 'react-native';
 
 export default function App() {
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
-  const [receivedData, setReceivedData] = useState(null);
-  const appState = useRef(AppState.currentState);
-  const [isCameraActive, setIsCameraActive] = useState(true); // Flag to control camera activation
-  const [message, setMessage] = useState("");
+  const [analysisId, setAnalysisId] = useState('');
+  const [message, setMessage] = useState('');
 
+  // Solicitar permiso para la cámara al cargar el componente
   useEffect(() => {
-    const getBarCodeScannerPermissions = async () => {
+    (async () => {
       const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === PermissionStatus.GRANTED);
-    };
-
-    getBarCodeScannerPermissions();
-
-    AppState.addEventListener("change", handleAppStateChange);
-
-    return () => {
-      AppState.removeEventListener("change", handleAppStateChange);
-    };
+      setHasPermission(status === 'granted');
+    })();
   }, []);
 
-  const handleAppStateChange = (nextAppState) => {
-    if (appState.current.match(/active/) && nextAppState !== "active") {
-      // App is going to background or inactive, stop the camera or do necessary actions
-      setIsCameraActive(false);
-      setScanned(false);
-      setReceivedData(null);
-    } else {
-      setIsCameraActive(true);
-    }
-
-    appState.current = nextAppState;
+  const handleBarCodeScanned = ({ type, data }) => {
+    setScanned(true);
+    submitUrlForAnalysis(data); // Asumiendo que `data` es la URL escaneada
   };
 
-  const handleBarCodeScanned = async ({ type, data }) => {
-    console.log(type, data);
-    setScanned(true);
-    setReceivedData(`Bar code detected is ${data}`);
-    setMessage(`Scanning QR code: ${data}`);
+  const virusTotalApiKey = '1bd323102055ecdad5d10b802f0a1ec5ecbecbbee39bc2864bb334e36387ea0d'; // Reemplaza esto con tu clave API real
 
-    // Llamada a la API de VirusTotal
+  async function submitUrlForAnalysis(urlToScan) {
+    const formData = new FormData();
+    formData.append('url', urlToScan);
+  
     try {
-      const virusTotalApiKey =
-        "1bd323102055ecdad5d10b802f0a1ec5ecbecbbee39bc2864bb334e36387ea0d"; // Reemplaza con tu clave API de VirusTotal
-      const apiUrl = "https://www.virustotal.com/vtapi/v2/url/report";
-      const response = await axios.post(apiUrl, {
-        apikey: virusTotalApiKey,
-        resource: data, // La URL escaneada del QR
+      const response = await fetch('https://www.virustotal.com/api/v3/urls', {
+        method: 'POST',
+        headers: {
+          'x-apikey': virusTotalApiKey,
+        },
+        body: formData
+      });
+  
+      const jsonResponse = await response.json();
+  
+      // Primero, verifica si jsonResponse contiene la propiedad 'data'
+      if (jsonResponse.data && jsonResponse.data.id) {
+        const analysisId = jsonResponse.data.id;
+        setAnalysisId(analysisId); // Guardamos el analysisId para usarlo después
+      } else {
+        // Si no hay datos o ID, manejar ese caso
+        setMessage('No se encontró el ID de análisis en la respuesta de VirusTotal.');
+        console.log(jsonResponse); // Puede ayudar a depurar qué respuesta se está recibiendo
+      }
+    } catch (error) {
+      setMessage(`Error al enviar la URL para análisis: ${error}`);
+      console.log(error); // Puede ayudar a depurar el error
+    }
+  }
+
+  async function getUrlAnalysisReport() {
+    try {
+      const response = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+        method: 'GET',
+        headers: {
+          'x-apikey': virusTotalApiKey,
+        }
       });
 
-      if (response.data.response_code !== 1) {
-        setMessage("URL no encontrada en la base de datos de VirusTotal.");
-        return;
-      }
-
-      setMessage(
-        `Resultados del escaneo de VirusTotal: ${JSON.stringify(response.data)}`
-      );
+      const jsonResponse = await response.json();
+      const hasVirus = jsonResponse.data.attributes.last_analysis_stats?.malicious > 0;
+      setMessage(hasVirus ? '¡Alerta! Se detectó un virus.' : 'La URL está limpia, no se detectaron virus.');
     } catch (error) {
-      setMessage(`Error al escanear la URL con VirusTotal: ${error}`);
+      setMessage(`Error al obtener el informe de análisis: ${error}`);
     }
-  };
+  }
+
+  if (hasPermission === null) {
+    return <Text>Requesting for camera permission</Text>;
+  }
+
+  if (hasPermission === false) {
+    return <Text>No access to camera</Text>;
+  }
 
   return (
-    <View style={styles.screenContainer}>
-      <View style={styles.cameraContainer}>
-        {isCameraActive && (
-          <BarCodeScanner
-            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-            style={StyleSheet.absoluteFillObject}
-          />
-        )}
-      </View>
-      <View style={styles.infoContainer}>
-        {scanned && (
-          <Pressable style={styles.button} onPress={() => setScanned(false)}>
-            <Text style={styles.text}>Tap to Scan Again</Text>
-          </Pressable>
-        )}
-        {receivedData != null && (
-          <Text style={styles.textData}>{receivedData}</Text>
-        )}
-        {message !== "" && <Text style={styles.message}>{message}</Text>}
+    <View style={styles.container}>
+      <BarCodeScanner
+        onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {scanned && (
+        <Button title={'Tap to Scan Again'} onPress={() => setScanned(false)} />
+      )}
+      {analysisId && (
+        <Button title={'Get Analysis Report'} onPress={getUrlAnalysisReport} />
+      )}
+      <View style={styles.footer}>
+        <Text style={styles.message}>{message}</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screenContainer: {
+  container: {
     flex: 1,
-    flexDirection: "column",
-    marginTop: StatusBar.currentHeight,
+    flexDirection: 'column',
+    justifyContent: 'center',
   },
-  cameraContainer: {
-    flex: 0.6,
-    flexDirection: "column",
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'green',
   },
-  infoContainer: {
-    flex: 0.4,
-    marginVertical: 20,
-  },
-  textData: {
-    justifyContent: "center",
-    alignContent: "center",
-    fontWeight: "bold",
-    fontSize: 20,
-    color: "black",
-    paddingTop: 30,
-  },
-  button: {
-    flexDirection: "column",
-    marginHorizontal: "20%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 4,
-    elevation: 3,
-    backgroundColor: "black",
-  },
-  text: {
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "bold",
-    letterSpacing: 0.25,
-    color: "white",
+  message: {
+    fontSize: 18,
+    color: 'black',
+    fontWeight: 'bold',
+    padding: 20,
+    textAlign: 'center'
   },
 });
